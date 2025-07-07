@@ -38,12 +38,27 @@
         render(h, c, "import-map");
       };
 
-      // Если нет поддержки import-map, то используем SW-polyfill
-      document.getElementById("btn-sw").onclick = async () => {
-        await navigator.serviceWorker.register("/sw-importmap.js", {
+      async function ensureSW() {
+        const reg = await navigator.serviceWorker.register("/sw-importmap.js", {
           scope: "/",
         });
-        await navigator.serviceWorker.ready;
+
+        if (navigator.serviceWorker.controller) {
+          return;
+        }
+
+        await new Promise((res) =>
+          navigator.serviceWorker.addEventListener(
+            "controllerchange",
+            () => res(),
+            { once: true }
+          )
+        );
+      }
+
+      // Если нет поддержки import-map, то используем SW-polyfill
+      document.getElementById("btn-sw").onclick = async () => {
+        await ensureSW();
         const [h, c] = await Promise.all([
           import("/alias/greeting"),
           import("/alias/compiledAnswer"),
