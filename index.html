@@ -1,86 +1,64 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>ok-loader demo</title>
-    <script src="/alias-map.js"></script>
-  </head>
-  <body>
-    <h1>Выберите как грузить модули</h1>
-    <button id="btn-im">import-map (modern)</button>
-    <button id="btn-sw">SW-polyfill (mid-tier)</button>
-    <button id="btn-shim">shimport-lite (legacy)</button>
-    <pre id="out"></pre>
+<head>
+  <meta charset="utf-8">
+  <title>ok-loader demo</title>
+  <script src="/alias-map.js"></script>
+</head>
+<body>
+  <h1>Выберите как грузить модули</h1>
+  <button id="btn-im">import-map (modern)</button>
+  <button id="btn-sw">SW-polyfill (mid-tier)</button>
+  <button id="btn-shim">shimport-lite (legacy)</button>
+  <pre id="out"></pre>
 
-    <script type="module">
-      const ALIAS = self.ALIAS;
-      const out = document.getElementById("out");
+  <script type="module">
+    const ALIAS = self.ALIAS;
+    const out = document.getElementById('out');
 
-      const render = (h, c, label) => {
-        out.textContent =
-          `[${label}] ` +
-          (h.greet ? h.greet("World") : h.say("World")) +
-          "  —  " +
-          c.answer();
+    const render = (h, c, label) => {
+      out.textContent = `[${label}] ` +
+        (h.greet ? h.greet('World') : h.say('World')) +
+        '  —  ' + c.answer();
+    };
+
+    // Если поддерживается import-map, то используем его
+    document.getElementById('btn-im').onclick = async () => {
+      const im = document.createElement('script');
+      im.type = 'importmap';
+      im.textContent = JSON.stringify({ imports: ALIAS }, null, 2);
+      document.head.append(im);
+
+      const [h, c] = await Promise.all([
+        import('/alias/greeting'),
+        import('/alias/compiledAnswer')
+      ]);
+      render(h, c, 'import-map');
       };
 
-      // Если поддерживается import-map, то используем его
-      document.getElementById("btn-im").onclick = async () => {
-        const im = document.createElement("script");
-        im.type = "importmap";
-        im.textContent = JSON.stringify({ imports: ALIAS }, null, 2);
-        document.head.append(im);
+    // Если нет поддержки import-map, то используем SW-polyfill
+    document.getElementById('btn-sw').onclick = async () => {
+      await navigator.serviceWorker.register('/sw-importmap.js', { scope: '/' });
+      const [h, c] = await Promise.all([
+        import('/alias/greeting'),
+        import('/alias/compiledAnswer')
+      ]);
+      render(h, c, 'SW');
+    };
 
-        const [h, c] = await Promise.all([
-          import("/alias/greeting"),
-          import("/alias/compiledAnswer"),
-        ]);
-        render(h, c, "import-map");
+    // Если нет поддержки import-map и SW, то используем shimport-lite
+    document.getElementById('btn-shim').onclick = () => {
+      window.__SHIMPORT_PATHS = ALIAS;
+      const shim = document.createElement('script');
+      shim.src = './shimport.dev.js';
+      shim.onload = () => {
+        const api = window.__shimport__;
+        const load = api.l || api.load;
+        Promise.all([ load('/alias/greeting'), load('/alias/compiledAnswer') ])
+          .then(([h, c]) => render(h, c, 'shim'));
       };
-
-      async function ensureSW() {
-        const reg = await navigator.serviceWorker.register("/sw-importmap.js", {
-          scope: "/",
-        });
-
-        if (navigator.serviceWorker.controller) {
-          return;
-        }
-
-        await new Promise((res) =>
-          navigator.serviceWorker.addEventListener(
-            "controllerchange",
-            () => res(),
-            { once: true }
-          )
-        );
-      }
-
-      // Если нет поддержки import-map, то используем SW-polyfill
-      document.getElementById("btn-sw").onclick = async () => {
-        await ensureSW();
-        const [h, c] = await Promise.all([
-          import("/alias/greeting"),
-          import("/alias/compiledAnswer"),
-        ]);
-        render(h, c, "SW");
-      };
-
-      // Если нет поддержки import-map и SW, то используем shimport-lite
-      document.getElementById("btn-shim").onclick = () => {
-        window.__SHIMPORT_PATHS = ALIAS;
-        const shim = document.createElement("script");
-        shim.src = "./shimport.dev.js";
-        shim.onload = () => {
-          const api = window.__shimport__;
-          const load = api.l || api.load;
-          Promise.all([
-            load("/alias/greeting"),
-            load("/alias/compiledAnswer"),
-          ]).then(([h, c]) => render(h, c, "shim"));
-        };
-        document.head.append(shim);
-      };
-    </script>
-  </body>
-</html>
+      document.head.append(shim);
+    };
+  </script>
+</body>
+</html> 
