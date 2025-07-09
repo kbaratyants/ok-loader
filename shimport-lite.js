@@ -24,6 +24,49 @@ var __shimport__ = (function (exports) {
         return r;
     }
 
+    var aliasMap = (typeof globalThis !== 'undefined' && globalThis.__SHIMPORT_PATHS) || {};
+    function resolveAlias(spec) {
+        return aliasMap[spec] || spec;
+    }
+    var promises = {};
+    function define(id, deps, factory) {
+        var __import = function (dep) { return load(new URL(resolveAlias(dep), document.baseURI)); };
+        return Promise.all(deps.map(__import)).then(function (__deps) {
+            var __exports = {};
+            factory.apply(void 0, __spreadArrays([__import, __exports], __deps));
+            return __exports;
+        });
+    }
+    function load(url) {
+        var resolvedUrl = resolveAlias(url);
+        return promises[resolvedUrl] || (promises[resolvedUrl] = fetch(resolvedUrl)
+            .then(function (r) { return r.text(); })
+            .then(function (text) { return evaluate(transform(text, resolvedUrl)); }));
+    }
+    var uid = 1;
+    function evaluate(code) {
+        if (typeof document !== 'undefined' && typeof URL !== 'undefined') {
+            return new Promise(function (fulfil) {
+                var id = "__shimport__" + uid++;
+                // creating a script tag gives us proper stack traces
+                var blob = new Blob([id + "=" + code], {
+                    type: 'application/javascript'
+                });
+                var script = document.createElement('script');
+                script.src = URL.createObjectURL(blob);
+                script.onload = function () {
+                    fulfil(window[id]);
+                    delete window[id];
+                };
+                document.head.appendChild(script);
+            });
+        }
+        else {
+            // for browsers without `URL`
+            return (0, eval)(code);
+        }
+    }
+
     function get_alias(specifiers, name) {
         var i = specifiers.length;
         while (i--) {
@@ -507,7 +550,7 @@ var __shimport__ = (function (exports) {
             nameBySource.set(d.source, d.name || "__dep_" + nameBySource.size);
         });
         var deps = Array.from(nameBySource.keys())
-            .map(function (s) { return "'" + s + "'"; })
+            .map(function (s) { return "'" + resolveAlias(s) + "'"; })
             .join(', ');
         var names = ['__import', '__exports'].concat(Array.from(nameBySource.values()))
             .join(', ');
@@ -546,51 +589,6 @@ var __shimport__ = (function (exports) {
         });
         transformed += "\n});\n//# sourceURL=" + id;
         return transformed;
-    }
-
-    // ---------- alias map -------------------------------------------------
-    var aliasMap = (typeof globalThis !== 'undefined' && globalThis.__SHIMPORT_PATHS) || {};
-    function resolveAlias(spec) {
-        return aliasMap[spec] || spec;
-    }
-    // ----------------------------------------------------------------------
-    var promises = {};
-    function define(id, deps, factory) {
-        var __import = function (dep) { return load(new URL(resolveAlias(dep), id)); };
-        return Promise.all(deps.map(__import)).then(function (__deps) {
-            var __exports = {};
-            factory.apply(void 0, __spreadArrays([__import, __exports], __deps));
-            return __exports;
-        });
-    }
-    function load(url) {
-        var resolvedUrl = resolveAlias(url);
-        return promises[resolvedUrl] || (promises[resolvedUrl] = fetch(resolvedUrl)
-            .then(function (r) { return r.text(); })
-            .then(function (text) { return evaluate(transform(text, resolvedUrl)); }));
-    }
-    var uid = 1;
-    function evaluate(code) {
-        if (typeof document !== 'undefined' && typeof URL !== 'undefined') {
-            return new Promise(function (fulfil) {
-                var id = "__shimport__" + uid++;
-                // creating a script tag gives us proper stack traces
-                var blob = new Blob([id + "=" + code], {
-                    type: 'application/javascript'
-                });
-                var script = document.createElement('script');
-                script.src = URL.createObjectURL(blob);
-                script.onload = function () {
-                    fulfil(window[id]);
-                    delete window[id];
-                };
-                document.head.appendChild(script);
-            });
-        }
-        else {
-            // for browsers without `URL`
-            return (0, eval)(code);
-        }
     }
 
     if (typeof document !== 'undefined') {

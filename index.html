@@ -1,64 +1,85 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>ok-loader demo</title>
-  <script src="/alias-map.js"></script>
-</head>
-<body>
-  <h1>Выберите как грузить модули</h1>
-  <button id="btn-im">import-map (modern)</button>
-  <button id="btn-sw">SW-polyfill (mid-tier)</button>
-  <button id="btn-shim">shimport-lite (legacy)</button>
-  <pre id="out"></pre>
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>OK-loader demo</title>
+    <link rel="icon" type="image/x-icon" href="/javascript.svg" />
+    <script nomodule src="/shimport-lite.js"></script>
 
-  <script type="module">
-    const ALIAS = self.ALIAS;
-    const out = document.getElementById('out');
+    <style>
+      body {
+        font-family: system-ui;
+        margin: 40px;
+      }
+      button {
+        margin-right: 12px;
+        padding: 6px 14px;
+      }
+      pre {
+        margin-top: 24px;
+        font-size: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Выбери стратегию загрузки</h1>
+    <button id="b-modern">import-map</button>
+    <button id="b-mid">es-module-shims</button>
+    <button id="b-legacy">shimport-lite</button>
 
-    const render = (h, c, label) => {
-      out.textContent = `[${label}] ` +
-        (h.greet ? h.greet('World') : h.say('World')) +
-        '  —  ' + c.answer();
-    };
+    <pre id="out">—</pre>
 
-    // Если поддерживается import-map, то используем его
-    document.getElementById('btn-im').onclick = async () => {
-      const im = document.createElement('script');
-      im.type = 'importmap';
-      im.textContent = JSON.stringify({ imports: ALIAS }, null, 2);
-      document.head.append(im);
+    <script type="module">
+      const bModern = document.getElementById("b-modern");
+      const bMid = document.getElementById("b-mid");
+      const bLegacy = document.getElementById("b-legacy");
 
-      const [h, c] = await Promise.all([
-        import('/alias/greeting'),
-        import('/alias/compiledAnswer')
-      ]);
-      render(h, c, 'import-map');
+      const ALIAS = {
+        greeting: "/res/hello.js",
+        answer: "/res/answer.js",
+        main: "/res/main.js",
       };
 
-    // Если нет поддержки import-map, то используем SW-polyfill
-    document.getElementById('btn-sw').onclick = async () => {
-      await navigator.serviceWorker.register('/sw-importmap.js', { scope: '/' });
-      const [h, c] = await Promise.all([
-        import('/alias/greeting'),
-        import('/alias/compiledAnswer')
-      ]);
-      render(h, c, 'SW');
-    };
+      const loadScript = (src, attr = {}) =>
+        new Promise((ok) => {
+          const s = Object.assign(document.createElement("script"), attr, {
+            src,
+            onload: ok,
+          });
+          document.head.append(s);
+        });
 
-    // Если нет поддержки import-map и SW, то используем shimport-lite
-    document.getElementById('btn-shim').onclick = () => {
-      window.__SHIMPORT_PATHS = ALIAS;
-      const shim = document.createElement('script');
-      shim.src = './shimport.dev.js';
-      shim.onload = () => {
-        const api = window.__shimport__;
-        const load = api.l || api.load;
-        Promise.all([ load('/alias/greeting'), load('/alias/compiledAnswer') ])
-          .then(([h, c]) => render(h, c, 'shim'));
+      bModern.onclick = async () => {
+        const map = document.createElement("script");
+        map.type = "importmap";
+        map.textContent = JSON.stringify({ imports: ALIAS });
+        document.head.append(map);
+
+        await import("main");
       };
-      document.head.append(shim);
-    };
-  </script>
-</body>
-</html> 
+
+      bMid.onclick = async () => {
+        const map = document.createElement("script");
+        map.type = "importmap-shim";
+        map.textContent = JSON.stringify({ imports: ALIAS });
+        document.head.append(map);
+
+        await loadScript(
+          "https://ga.jspm.io/npm:es-module-shims@2.6.1/dist/es-module-shims.js",
+          { async: true, crossorigin: "anonymous" }
+        );
+
+        await importShim.ready;
+        await importShim("main");
+      };
+
+      bLegacy.onclick = async () => {
+        window.__SHIMPORT_PATHS = ALIAS;
+        if (!window.__shimport__) await loadScript("/shimport-lite.js");
+
+        const load = __shimport__.l || __shimport__.load;
+        await load("main");
+      };
+    </script>
+  </body>
+</html>
